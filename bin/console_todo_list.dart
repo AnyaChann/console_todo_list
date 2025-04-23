@@ -1,6 +1,35 @@
 import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 
+void insertSampleData(Database db) {
+  try {
+    // Kiểm tra xem bảng có dữ liệu hay chưa
+    final result = db.select('SELECT COUNT(*) AS count FROM todos');
+    final count = result.first['count'] as int;
+
+    if (count == 0) {
+      // Thêm dữ liệu mẫu
+      db.execute('INSERT INTO todos (title, isCompleted) VALUES (?, ?)', [
+        'Học Flutter',
+        0,
+      ]);
+      db.execute('INSERT INTO todos (title, isCompleted) VALUES (?, ?)', [
+        'Xem tài liệu SQLite',
+        1,
+      ]);
+      db.execute('INSERT INTO todos (title, isCompleted) VALUES (?, ?)', [
+        'Viết ứng dụng Todo List',
+        0,
+      ]);
+      print("Đã thêm dữ liệu mẫu.");
+    } else {
+      print("Dữ liệu đã tồn tại, không cần thêm dữ liệu mẫu.");
+    }
+  } catch (e) {
+    print("Lỗi khi thêm dữ liệu mẫu: $e");
+  }
+}
+
 void main() {
   final db = sqlite3.open('todos.db');
 
@@ -11,6 +40,9 @@ void main() {
       isCompleted INTEGER NOT NULL DEFAULT 0
     )
   ''');
+
+  // Thêm dữ liệu mẫu
+  insertSampleData(db);
 
   print("Chào mừng đến với ứng dụng Todo List!");
   while (true) {
