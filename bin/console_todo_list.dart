@@ -1,52 +1,91 @@
+import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 
 void main() {
-  // Open the database (or create it if it doesn't exist)
   final db = sqlite3.open('todos.db');
 
-  // Create the table if it doesn't exist
   db.execute('''
     CREATE TABLE IF NOT EXISTS todos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL
+      title TEXT NOT NULL,
+      isCompleted INTEGER NOT NULL DEFAULT 0
     )
   ''');
 
-  try {
-    // Add tasks
-    addTodo(db, "Học Flutter");
-    addTodo(db, "Xem tài liệu SQLite");
+  print("Chào mừng đến với ứng dụng Todo List!");
+  while (true) {
+    print("\n==============================");
+    print("       TODO LIST MENU         ");
+    print("==============================");
+    print("1. ➕ Thêm công việc");
+    print("2. 📋 Hiển thị danh sách công việc");
+    print("3. ✏️  Cập nhật công việc");
+    print("4. ❌ Xóa công việc");
+    print("5. ✅ Đánh dấu Hoàn thành/Chưa hoàn thành");
+    print("6. 🚪 Thoát");
+    print("==============================\n");
 
-    // Handle empty title gracefully
-    try {
-      addTodo(db, ""); // Attempt to add an empty title
-    } catch (e) {
-      print("Không thể thêm công việc: $e");
+    stdout.write("Nhập lựa chọn của bạn: ");
+    final choice = stdin.readLineSync();
+
+    switch (choice) {
+      case '1':
+        stdout.write("Nhập tiêu đề công việc: ");
+        final title = stdin.readLineSync() ?? "";
+        try {
+          addTodo(db, title);
+        } catch (e) {
+          print("Không thể thêm công việc: $e");
+        }
+        break;
+
+      case '2':
+        getTodos(db);
+        break;
+
+      case '3':
+        stdout.write("Nhập ID công việc cần cập nhật: ");
+        final id = int.tryParse(stdin.readLineSync() ?? "") ?? -1;
+        stdout.write("Nhập tiêu đề mới: ");
+        final newTitle = stdin.readLineSync() ?? "";
+        try {
+          updateTodo(db, id, newTitle);
+        } catch (e) {
+          print("Không thể cập nhật công việc: $e");
+        }
+        break;
+
+      case '4':
+        stdout.write("Nhập ID công việc cần xóa: ");
+        final id = int.tryParse(stdin.readLineSync() ?? "") ?? -1;
+        try {
+          deleteTodo(db, id);
+        } catch (e) {
+          print("Không thể xóa công việc: $e");
+        }
+        break;
+
+      case '5':
+        stdout.write("Nhập ID công việc cần thay đổi trạng thái: ");
+        final id = int.tryParse(stdin.readLineSync() ?? "") ?? -1;
+        try {
+          toggleTodoStatus(db, id);
+        } catch (e) {
+          print("Không thể thay đổi trạng thái công việc: $e");
+        }
+        break;
+
+      case '6':
+        print("Thoát ứng dụng. Tạm biệt!");
+        db.dispose();
+        exit(0);
+
+      default:
+        print("Lựa chọn không hợp lệ. Vui lòng thử lại.");
     }
-
-    // Get and print all tasks
-    getTodos(db);
-
-    // Update a task
-    updateTodo(db, 1, "Học Flutter nâng cao");
-
-    // Get and print all tasks after update
-    getTodos(db);
-
-    // Delete a task
-    deleteTodo(db, 2);
-
-    // Get and print all tasks after deletion
-    getTodos(db);
-  } catch (e) {
-    print("Lỗi: $e");
-  } finally {
-    // Close the database
-    db.dispose();
   }
 }
 
-// Create (Add a new task)
 void addTodo(Database db, String title) {
   if (title.isEmpty) {
     throw Exception("Title không được để trống.");
@@ -60,7 +99,6 @@ void addTodo(Database db, String title) {
   }
 }
 
-// Read (Get all tasks)
 void getTodos(Database db) {
   try {
     final result = db.select('SELECT * FROM todos');
@@ -70,7 +108,9 @@ void getTodos(Database db) {
     } else {
       print("Danh sách công việc:");
       for (final row in result) {
-        print("- ${row['id']}: ${row['title']}");
+        final status =
+            row['isCompleted'] == 1 ? "Hoàn thành" : "Chưa hoàn thành";
+        print("- ${row['id']}: ${row['title']} [${status}]");
       }
     }
   } catch (e) {
@@ -78,19 +118,14 @@ void getTodos(Database db) {
   }
 }
 
-// Update (Modify an existing task)
 void updateTodo(Database db, int id, String newTitle) {
   if (newTitle.isEmpty) {
     throw Exception("Title không được để trống.");
   }
 
   try {
-    db.execute(
-      'UPDATE todos SET title = ? WHERE id = ?',
-      [newTitle, id],
-    );
+    db.execute('UPDATE todos SET title = ? WHERE id = ?', [newTitle, id]);
 
-    // ignore: deprecated_member_use
     final changes = db.getUpdatedRows();
 
     if (changes > 0) {
@@ -103,15 +138,10 @@ void updateTodo(Database db, int id, String newTitle) {
   }
 }
 
-// Delete (Remove a task)
 void deleteTodo(Database db, int id) {
   try {
-    db.execute(
-      'DELETE FROM todos WHERE id = ?',
-      [id],
-    );
+    db.execute('DELETE FROM todos WHERE id = ?', [id]);
 
-    // ignore: deprecated_member_use
     final changes = db.getUpdatedRows();
 
     if (changes > 0) {
@@ -121,5 +151,31 @@ void deleteTodo(Database db, int id) {
     }
   } catch (e) {
     throw Exception("Lỗi khi xóa công việc: $e");
+  }
+}
+
+void toggleTodoStatus(Database db, int id) {
+  try {
+    final result = db.select('SELECT isCompleted FROM todos WHERE id = ?', [
+      id,
+    ]);
+
+    if (result.isEmpty) {
+      print("Không tìm thấy công việc có ID $id.");
+      return;
+    }
+
+    final currentStatus = result.first['isCompleted'] as int;
+    final newStatus = currentStatus == 1 ? 0 : 1;
+
+    db.execute('UPDATE todos SET isCompleted = ? WHERE id = ?', [
+      newStatus,
+      id,
+    ]);
+
+    final statusText = newStatus == 1 ? "Hoàn thành" : "Chưa hoàn thành";
+    print("Đã cập nhật trạng thái công việc có ID $id thành: $statusText");
+  } catch (e) {
+    throw Exception("Lỗi khi cập nhật trạng thái công việc: $e");
   }
 }
